@@ -1,0 +1,8 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/owl-core",
+  "crates/nat64",
+  "crates/common-utils",
+  "crates/owl-dns"
+]

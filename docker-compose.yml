@@ -1,0 +1,121 @@
+version: "3.9"
+
+########################################################################
+# 仮想ネットワーク定義
+########################################################################
+networks:
+  owl-net:                        # 全コンテナが所属する閉域ブリッジ網
+    driver: bridge
+    enable_ipv6: true             # IPv6 を有効化（Docker Desktop は要設定）
+    ipam:
+      config:
+        # IPv4 セグメント（RFC1918）
+        - subnet: "10.10.0.0/24"
+          gateway: "10.10.0.1"
+        # IPv6 セグメント（ULA）
+        - subnet: "fd00:dead:beef::/64"
+          gateway: "fd00:dead:beef::1"
+
+########################################################################
+# サービス定義
+########################################################################
+services:
+
+  ######################################################################
+  # 1) VPN エンジン (Rust 製 Owl Core + WireGuard ユーザ空間)
+  ######################################################################
+  owl-core:
+    build: ./owl-core
+    container_name: owl-core
+    networks:
+      owl-net:                              # 固定 IP は付けず名前解決で通信
+    cap_add:
+      - NET_ADMIN                           # TUN デバイス操作に必要
+    devices:
+      - /dev/net/tun:/dev/net/tun           # ホストの TUN を使う
+    volumes:
+      - ./config/owl.toml:/etc/owl/config.toml:ro  # Owl 設定 (読み取り専用)
+      - owl-logs:/var/log/owl                        # 永続ログ
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - TZ=Asia/Tokyo
+    user: "1000:1000"                       # root 以外で実行
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true              # 特権昇格を禁止
+      - read_only:true                      # ルート FS を読み取り専用化
+    healthcheck:                            # ローカル専用ステータスを監視
+      test: ["CMD", "wget", "-qO", "-", "http://127.0.0.1:9999/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    dns:                                    # owl-dns を参照
+      - 10.10.0.10
+    sysctls:                                # IPv6 ルーティングのみ許可
+      net.ipv6.conf.all.forwarding: "1"
+      net.ipv4.ip_forward: "0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  ######################################################################
+  # 2) 自社運用 DNS + DNS64 サーバ (trust‑dns ベース)
+  ######################################################################
+  owl-dns:
+    build: ./owl-dns
+    container_name: owl-dns
+    networks:
+      owl-net:
+        ipv4_address: 10.10.0.10           # 固定 IP：クライアント参照用
+    ports:                                 # ホスト⇔DNS を開放（オプション）
+      - "53:53/udp"
+      - "53:53/tcp"
+    volumes:
+      - ./config/owl-dns.toml:/etc/owl-dns/config.toml:ro
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Tokyo
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  ######################################################################
+  # 3) NAT64 ゲートウェイ (tayga)
+  ######################################################################
+  nat64:
+    image: tayga/tayga:1.2
+    container_name: owl-nat64
+    networks:
+      owl-net:
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - owl-core                            # VPN が先に起動
+    environment:
+      - PREFIX=64:ff9b::/96                 # RFC 6052 Well‑Known Prefix
+      - IPV4_POOL=10.199.0.0/24             # 内部 IPv4 プール
+    volumes:
+      - nat64-data:/var/lib/tayga
+    restart: unless-stopped
+    sysctls:
+      net.ipv6.conf.all.forwarding: "1"
+      net.ipv4.ip_forward: "1"
+      net.ipv6.conf.all.proxy_ndp: "1"      # NDP プロキシで外部へ応答
+    command: ["tayga", "--mktun", "--flush"] # 起動時に dynamic.map を初期化
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  
+########################################################################
+# 永続ボリューム定義
+########################################################################
+volumes:
+  owl-logs:      # Owl 本体ログ
+  nat64-data:    # tayga 状態ファイル
