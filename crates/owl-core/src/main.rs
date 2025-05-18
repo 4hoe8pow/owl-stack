@@ -104,6 +104,7 @@ async fn startup(cfg: Config) -> Result<(), OwlError> {
     // 2) TUN / WireGuard スタック
     tun::spawn_tun(cfg).await?;
 
+    println!("owl-core running. Press Ctrl+C to stop."); // ←追加
     info!("owl-core running. Press Ctrl+C to stop.");
     tokio::signal::ctrl_c().await.map_err(anyhow::Error::from)?;
     info!("Shutting down…");
@@ -120,6 +121,7 @@ fn load_config(path: &PathBuf) -> Result<Config, OwlError> {
         toml::from_str(&text).map_err(|e| OwlError::ConfigParseFailed(e.to_string()))?;
     Ok(cfg)
 }
+
 fn collect_ips(cfg: &Config) -> HashSet<IpAddr> {
     cfg.peers
         .iter()

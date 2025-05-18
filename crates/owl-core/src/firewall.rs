@@ -15,7 +15,8 @@ pub fn block_all() -> Result<(), FirewallError> {
     let nft = Command::new("nft").args(["flush", "ruleset"]).status();
     match nft {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(FirewallError::NftFailed("nft command not found".into()));
+            // macOS等ではnftが無いのでスキップ
+            return Ok(());
         }
         Err(e) => return Err(FirewallError::Io(e)),
         Ok(s) if !s.success() => return Err(FirewallError::NftFailed("flush ruleset".into())),
@@ -26,7 +27,7 @@ pub fn block_all() -> Result<(), FirewallError> {
         .status();
     match nft {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(FirewallError::NftFailed("nft command not found".into()));
+            return Ok(());
         }
         Err(e) => return Err(FirewallError::Io(e)),
         Ok(s) if !s.success() => return Err(FirewallError::NftFailed("add table".into())),
@@ -40,7 +41,7 @@ pub fn block_all() -> Result<(), FirewallError> {
         .status();
     match nft {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(FirewallError::NftFailed("nft command not found".into()));
+            return Ok(());
         }
         Err(e) => return Err(FirewallError::Io(e)),
         Ok(s) if !s.success() => return Err(FirewallError::NftFailed("add chain".into())),
@@ -66,7 +67,8 @@ pub fn add_allowed(ips: &std::collections::HashSet<IpAddr>) -> Result<(), Firewa
             .status();
         match nft {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(FirewallError::NftFailed("nft command not found".into()));
+                // macOS等ではスキップ
+                return Ok(());
             }
             Err(e) => return Err(FirewallError::Io(e)),
             Ok(s) if !s.success() => {
