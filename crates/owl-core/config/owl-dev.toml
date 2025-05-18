@@ -1,0 +1,19 @@
+###############################################################################
+# Owl Core 開発用設定ファイル (owl-dev.toml)
+# ––– 本番投入前に必ず鍵・ポート・許可 IP を置き換えること –––
+###############################################################################
+
+[interface]
+listen_port = 51820                # UDP 待受ポート
+private_key = "replace_me_dev_key" # WireGuard 用秘密鍵 (64base64)
+
+[[peers]]
+public_key = "replace_peer1_pub" # 接続を許可する Peer 公開鍵
+allowed_ips = [
+  "fd00:dead:beef::100", # 固定 IPv6 (例)
+  "10.10.0.100",         # 固定 IPv4 (例)
+]
+
+[[peers]]
+public_key = "replace_peer2_pub"
+allowed_ips = ["fd00:dead:beef::101", "10.10.0.101"]

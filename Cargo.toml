@@ -6,3 +6,7 @@ members = [
   "crates/common-utils",
   "crates/owl-dns"
 ]
+
+[workspace.dependencies]
+anyhow = { version = "1", features = ["backtrace"] }
+thiserror = "2"
